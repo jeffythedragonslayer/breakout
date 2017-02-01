@@ -1,0 +1,253 @@
+Rem Project: Breakout
+Rem Created: 10/4/2006 6:07:01 PM
+
+Rem ***** Main Source File *****
+
+
+rem start the syncing
+sync on
+sync rate 60
+backdrop off
+hide mouse
+
+rem load the sounds
+set dir "Media"
+load sound "White Zap.wav", 1
+load sound "Hit Tube.wav", 2
+load sound "Hit Pipe.wav", 3
+load music "music triumph.mp3", 1
+loop music 1
+
+rem all the media besides the backdrop is in a single file
+load image "Pieces.png", 1, 1
+paste image 1, 0, 0
+set image colorkey 255, 0, 255
+
+rem get the ball image
+get image 2, 43, 145, 57, 159, 1
+
+rem get the paddle image
+get image 3, 0, 163, 57, 173, 1
+
+rem get the tiles
+local tile as integer
+local coordinate as integer
+for tile = 4 to 10
+   get image tile, 0, coordinate, 41, coordinate + 18, 1
+   inc coordinate, 18
+next tile
+
+rem we're done with the main media file, now we need to load the backdrop
+delete image 1
+load image "Backdrop.png", 1, 1
+
+create bitmap 1, 640, 1440
+paste image 1, 0, 0
+sprite 1, 0, 480, 1
+set sprite 1, 0, 0
+flip sprite 1
+paste image 1, 0, 960
+sync
+get image 1, 0, 0, 640, 1440, 1
+delete bitmap 1
+set current bitmap 0
+delete sprite 1
+
+rem set up the game
+
+rem make backdrop
+sprite 1, 0, 0, 1
+set sprite 1, 0, 0
+
+rem make asteroid
+create animated sprite 300, "asteroid.png", 4, 4, 12
+sprite 300, rnd(576) + 64, rnd(416) + 64, 12
+offset sprite 300, 64, 64
+scale sprite 300, 50
+
+local asteroid as integer
+for asteroid = 301 to 350
+   clone sprite 300, asteroid
+   sprite asteroid, rnd(576) + 64, rnd(416) + 64, 12
+   rotate sprite asteroid, rnd(360)
+   scale sprite asteroid, 50
+next asteroid
+delete sprite 300
+
+rem make ball
+sprite 2, 100, 100, 2
+set sprite 2, 0, 1
+offset sprite 2, 6, 6
+
+rem make paddle
+sprite 3, 0, 400, 3
+set sprite 3, 0, 1
+
+rem make all the blocks
+local block as integer
+local color as integer
+block = 5
+for color = 4 to 10
+   for tile = 1 to 15
+      sprite block, (tile * 41) - 28.5, color * 18, color
+      inc block
+   next tile
+next color
+
+local hi as float
+local clock as float
+local ball_x_momentum as float
+local ball_y_momentum as float
+local relative_x as integer
+local relatice_y as integer
+global score as integer
+global balls as integer
+local newmouse as integer
+local oldmouse as integer
+balls = 6
+gosub reset
+balls = 5
+
+do
+   oldmouse = newmouse
+   newmouse = mousex()
+
+   rem move the ball
+   sprite 2, sprite x(2) + ball_x_momentum, sprite y(2) + ball_y_momentum, 2
+
+   rem if the ball hits the ceiling, make it bounce
+   if sprite y(2) - sprite height(2) / 2 <= 0
+      ball_y_momentum = -ball_y_momentum
+      play sound 2
+   endif
+   if sprite y(2) + sprite height(2) / 2 >= 480 then gosub reset
+
+   rem if the ball hits the wall, make it bounce
+   if sprite x(2) + sprite width(2) / 2 >= 640 or sprite x(2) - sprite width(2) / 2 <= 0
+      ball_x_momentum = -ball_x_momentum
+      play sound 2
+   endif
+
+   rem if the ball hits the paddle, make it bounce
+   if sprite hit(2, 3) and sprite y(2) < sprite y(3)
+      ball_y_momentum = -ball_y_momentum
+      inc ball_x_momentum, (newmouse - oldmouse) / 5
+      play sound 3
+   endif
+
+   rem if the ball hits a block, make it bounce
+   block = 5
+   for color = 4 to 10
+      for tile = 1 to 15
+         if sprite exist(block)
+            if sprite hit(2, block)
+               rem play the hit block sound
+               play sound 1
+
+               rem work out where the ball hit the block, so we know how to make it bounce
+               relative_x = sprite x(2) - sprite x(block)
+               relative_y = sprite y(2) - sprite y(block)
+               rem to find which piece of the rectangle the ball hit, a linear inequality is used to test if the position of the ball is lower than the dividing line
+               if relative_y > -(sprite height(block) / sprite width(block)) * relative_x + sprite height(block)
+                  rem ball is in lower right half
+                  if relative_y > (sprite height(block) / sprite width(block)) * relative_x
+                     rem ball is in lower quarter
+                     ball_y_momentum = -ball_y_momentum
+                  else
+                     rem ball is in right quarter
+                     ball_x_momentum = -ball_x_momentum
+                  endif
+               else
+                  rem ball is in upper left half
+                     if relative_y > (sprite height(block) / sprite width(block)) * relative_x
+                     rem ball is in left quarter
+                     ball_x_momentum = -ball_x_momentum
+                  else
+                     rem ball is in upper quarter
+                     ball_y_momentum = -ball_y_momentum
+                  endif
+               endif
+
+               rem make the sprite dissapear and increment the score
+               delete sprite block
+               inc score,  (8 - (color - 3)) * 5
+               HUD()
+
+               if score = 2100
+                  rem give a completion bonus
+                  inc score, 1000
+                  inc score, balls * 500
+                  sync
+                  show mouse
+                  exit prompt "Blocks - 2100" + chr$(13) + "Completion Bonus - 1000" + chr$(13) + "Extra Balls - " + str$(balls * 500) + chr$(13) + chr$(13) + "You win with a final score of " + str$(score) + "!" + chr$(13) + chr$(13) + "Credits" + chr$(13) + "Programming - Jeff Linahan" + chr$(13) + "Sounds, Backdrop, and Asteroids - The Game Creators" + chr$(13) + "Art - David Gervais", "Breakout"
+                  end
+               endif
+
+               rem make it so the ball can't hit any more blocks
+               color = 10
+               exit
+
+            endif
+         endif
+         inc block
+      next title
+   next color
+
+
+
+   rem move the paddle
+   sprite 3, newmouse, 400, 3
+   if sprite x(3) + sprite width(3) > 640 then sprite 3, 640 - sprite width(3), 400, 3
+
+   backdrop_move()
+
+   sync
+loop
+
+reset:
+rem position ball to a random position and take away a ball, if that was the last ball exit
+dec balls
+HUD()
+if balls = 0
+   sync
+   show mouse
+   exit prompt "Sorry, you lost with a score of " + str$(score) + "." + chr$(13) + chr$(13) + "Credits" + chr$(13) + "Programming - Jeff Linahan" + chr$(13) + "Sounds, Backdrop and Asteroids - The Game Creators" + chr$(13) + "Art - David Gervais", "Breakout"
+   end
+endif
+sprite 2, rnd(600) + 20, 210, 2
+sync
+rem wait until timer has elapsed to release ball
+clock = timer() + 2000
+repeat
+   oldmouse = newmouse
+   newmouse = mousex()
+   rem move the paddle
+   sprite 3, newmouse, 400, 3
+   if sprite x(3) + sprite width(3) > 640 then sprite 3, 640 - sprite width(3), 400, 3
+   backdrop_move()
+   sync
+until timer() >= clock
+ball_x_momentum = 5
+ball_y_momentum = 5
+return
+
+function HUD()
+   set window title "Breakout  Score: " + str$(score) + " Balls: " + str$(balls)
+endfunction
+
+function backdrop_move()
+   rem move the background
+   move sprite 1, -.5
+   if sprite y(1) > 0 then sprite 1, 0, -960, 1
+   play_asteroids()
+endfunction
+
+function play_asteroids()
+   rem play the asteriods
+   for asteroid = 301 to 350
+      rotate sprite asteroid, sprite angle(asteroid) + 1
+      play sprite asteroid, 1, 16, 50
+      sprite asteroid, sprite x(asteroid), sprite y(asteroid) + 1, 12
+      if sprite y(asteroid) > 544 then sprite asteroid, rnd(576) + 64, -rnd(100), 12
+   next asteroid
+endfunction
